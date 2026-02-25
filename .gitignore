@@ -1,0 +1,9 @@
+/*
+!.vscode/
+!oidbt_ipfs_synchronizer/
+!.gitignore
+!README.md
+!ruff.toml
+!pyproject.toml
+
+__pycache__

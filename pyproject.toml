@@ -1,0 +1,29 @@
+[build-system]
+requires = [
+    "setuptools>=82",
+]
+
+[project]
+dynamic = ["version"]
+name    = "oidbt_ipfs_synchronizer"
+readme  = "README.md"
+# license = "AGPL-3.0-or-later"
+authors = [{ name = "op200" }]
+classifiers = [
+    "Programming Language :: Python :: 3.14",
+    "Typing :: Typed",
+]
+dependencies = [
+    "oidbt_bt_entry_getter",
+]
+requires-python = ">=3.14"
+
+[project.urls]
+Homepage = "https://github.com/OIDBT/oidbt_ipfs_synchronizer"
+Source   = "https://github.com/OIDBT/oidbt_ipfs_synchronizer"
+
+[tool.setuptools.dynamic]
+version = { attr = "oidbt_ipfs_synchronizer.__version__" }
+
+[tool.setuptools.package-dir]
+oidbt_ipfs_synchronizer = "oidbt_ipfs_synchronizer"
