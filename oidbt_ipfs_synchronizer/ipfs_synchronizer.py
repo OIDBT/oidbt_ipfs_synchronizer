@@ -257,7 +257,7 @@ class Ipfs_synchronizer:
     async def auto_sync(self) -> NoReturn:
         """自动同步"""
         cycle_num: int = 1
-        sleep_time: Literal[60, 3600] = 60
+        sleep_time: Literal[60, 600] = 60
         while True:
             await asyncio.sleep(sleep_time)
 
@@ -274,4 +274,4 @@ class Ipfs_synchronizer:
             log.info("IPNS Name = {}", ipns_name)
 
             cycle_num += 1
-            sleep_time = 3600
+            sleep_time = 600
