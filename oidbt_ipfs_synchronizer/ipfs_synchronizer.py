@@ -25,6 +25,11 @@ class Ipfs_synchronizer:
     ROOT_DIR: ClassVar = Path("oidbt_ipfs_root")
     ZSTD_LEVEL: ClassVar = 22
     RM_FILE_TD: ClassVar = datetime.timedelta(days=7)
+    IPNS_PARAMS: ClassVar = {
+        "key": "self",
+        "lifetime": "720h",
+        "ttl": "10m",
+    }
 
     @classmethod
     def enzstd(cls, data: bytes) -> bytes:
@@ -177,7 +182,10 @@ class Ipfs_synchronizer:
 
             except httpx.HTTPStatusError as e:
                 log.error(
-                    "{} 状态码错误: {}", self.__class__.__name__, e.response.status_code
+                    "{} 状态码错误: {} {}",
+                    self.__class__.__name__,
+                    e.response.status_code,
+                    e.response.text,
                 )
             except httpx.ConnectError as e:
                 log.error("{} 连接失败: {}", self.__class__.__name__, e)
@@ -190,6 +198,8 @@ class Ipfs_synchronizer:
             else:
                 return last_res.Hash
 
+            await asyncio.sleep(1)
+
     async def sync_ipns(self, *, cid: str):
         class Name_publish_item(BaseModel):
             Name: str
@@ -199,12 +209,7 @@ class Ipfs_synchronizer:
             try:
                 response = await self.client.post(
                     "http://127.0.0.1:5001/api/v0/name/publish",
-                    params={
-                        "arg": cid,
-                        "key": "self",
-                        "lifetime": "30d",
-                        "ttl": "1h",
-                    },
+                    params={"arg": cid, **self.IPNS_PARAMS},
                 )
                 log.debug(
                     "{} 请求头: {}",
@@ -231,7 +236,10 @@ class Ipfs_synchronizer:
 
             except httpx.HTTPStatusError as e:
                 log.error(
-                    "{} 状态码错误: {}", self.__class__.__name__, e.response.status_code
+                    "{} 状态码错误: {} {}",
+                    self.__class__.__name__,
+                    e.response.status_code,
+                    e.response.text,
                 )
             except httpx.ConnectError as e:
                 log.error("{} 连接失败: {}", self.__class__.__name__, e)
@@ -244,14 +252,16 @@ class Ipfs_synchronizer:
             else:
                 return res.Name
 
+            await asyncio.sleep(1)
+
     async def auto_sync(self) -> NoReturn:
         """自动同步"""
         cycle_num: int = 1
-        sleep_time: Literal[60, 600] = 60
+        sleep_time: Literal[60, 3600] = 60
         while True:
             await asyncio.sleep(sleep_time)
 
-            log.debug("{} 第 {} 次同步", self.__class__.__name__, cycle_num)
+            log.info("{} 第 {} 次同步", self.__class__.__name__, cycle_num)
 
             bgm_files = await self.sync_bgm_files()
             db_file = await self.vacuum_db()
@@ -261,11 +271,7 @@ class Ipfs_synchronizer:
             )
             ipns_name = await self.sync_ipns(cid=cid)
 
-            log.debug(
-                "{} IPNS Name = {}",
-                self.__class__.__name__,
-                ipns_name,
-            )
+            log.info("IPNS Name = {}", ipns_name)
 
             cycle_num += 1
-            sleep_time = 600
+            sleep_time = 3600
