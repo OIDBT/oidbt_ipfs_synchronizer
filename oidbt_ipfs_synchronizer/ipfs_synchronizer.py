@@ -27,8 +27,8 @@ class Ipfs_synchronizer:
     RM_FILE_TD: ClassVar = datetime.timedelta(days=7)
     IPNS_PARAMS: ClassVar = {
         "key": "self",
-        "lifetime": "720h",
-        "ttl": "10m",
+        "lifetime": "8760h",
+        "ttl": "5m",
     }
 
     @classmethod
@@ -67,7 +67,11 @@ class Ipfs_synchronizer:
         self.bt_entry_getter_list = bt_entry_getter_list
 
     def __del__(self) -> None:
-        asyncio.run(self.client.aclose())
+        try:
+            asyncio.get_running_loop()
+            asyncio.create_task(self.client.aclose())  # noqa: RUF006
+        except RuntimeError:
+            asyncio.run(self.client.aclose())
 
     async def sync_bgm_files(self) -> tuple[tuple[str, bytes], ...]:
         """遍历 BT Entry 的数据库，更新以 Bangumi ID 为键的目录文件"""
@@ -75,7 +79,8 @@ class Ipfs_synchronizer:
         class File_content(BaseModel):
             class Magnet_item(BaseModel):
                 magnet: str
-                source_link_list: list[str]  # 一定有来源，所以不设置空默认值
+                source_link_set: set[str]  # 一定有来源，所以不设置空默认值
+                title_set: set[str]
 
             update_time: datetime.datetime = pydantic.Field(
                 default_factory=datetime.datetime.now
@@ -86,31 +91,39 @@ class Ipfs_synchronizer:
         bgm_id__file_content: dict[int, File_content] = {}
         datetime_now = datetime.datetime.now()
         for bt_entry_getter in self.bt_entry_getter_list:
+            page_link_head = bt_entry_getter.page_link_head
             for website_entry_data in await bt_entry_getter.get_all_data():
-                if (magnet := website_entry_data.magnet) is None:
+                if (
+                    not website_entry_data.magnet
+                    or not website_entry_data.match_id_list
+                ):
                     continue
-                magnet = magnet.decode()
-                source_link = (
-                    bt_entry_getter.page_link_head + website_entry_data.page_link_point
-                )
-                for match_id in website_entry_data.match_id_list or []:
-                    if match_id not in bgm_id__file_content:
-                        bgm_id__file_content[match_id] = File_content()
-                    file_content = bgm_id__file_content[match_id]
-                    file_content.update_time = datetime_now
+                magnet = website_entry_data.magnet.decode()
+                source_link = page_link_head + website_entry_data.page_link_point
+                source_title = website_entry_data.title
 
-                    magnet_list = file_content.magnet_list
-                    for magnet_item in magnet_list:
-                        if magnet_item.magnet == magnet:
-                            if source_link not in magnet_item.source_link_list:
-                                magnet_item.source_link_list.append(source_link)
-                            break
-                    else:
-                        magnet_list.append(
-                            File_content.Magnet_item(
-                                magnet=magnet, source_link_list=[source_link]
-                            )
+                # 只取匹配度最高的 ID (第一个 ID)
+                match_id = website_entry_data.match_id_list[0]
+
+                if match_id not in bgm_id__file_content:
+                    bgm_id__file_content[match_id] = File_content()
+                file_content = bgm_id__file_content[match_id]
+                file_content.update_time = datetime_now
+
+                magnet_list = file_content.magnet_list
+                for magnet_item in magnet_list:
+                    if magnet_item.magnet == magnet:
+                        magnet_item.source_link_set.add(source_link)
+                        magnet_item.title_set.add(source_title)
+                        break
+                else:
+                    magnet_list.append(
+                        File_content.Magnet_item(
+                            magnet=magnet,
+                            source_link_set={source_link},
+                            title_set={source_title},
                         )
+                    )
 
         # 生成返回值
         root_path: Final = str(self.ROOT_DIR / "bangumi").replace("\\", "/")
