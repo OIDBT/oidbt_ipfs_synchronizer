@@ -14,7 +14,7 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
-    "oidbt_bt_entry_getter",
+    "oidbt_bt_entry_getter @ git+https://github.com/OIDBT/oidbt_bt_entry_getter.git",
 ]
 requires-python = ">=3.14"
 
