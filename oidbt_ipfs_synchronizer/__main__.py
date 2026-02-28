@@ -4,11 +4,16 @@ import asyncio
 async def run_example():
     import urllib.request
 
+    import oidbt_bangumi_ani_getter.log
     from oidbt_bangumi_ani_getter import Bangumi_ani_getter
     from oidbt_bt_entry_getter import Mikan_bt_entry_getter
 
     from .ipfs_synchronizer import Ipfs_synchronizer
     from .log import log
+
+    oidbt_bangumi_ani_getter.log.log.print_level = (
+        oidbt_bangumi_ani_getter.log.log.LogLevel.info
+    )
 
     log.print_level = log.LogLevel.debug
 

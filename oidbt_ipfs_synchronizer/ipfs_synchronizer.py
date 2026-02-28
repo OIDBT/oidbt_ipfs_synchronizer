@@ -24,7 +24,6 @@ class Ipfs_synchronizer:
     DATABASE_LOCK: ClassVar = asyncio.Lock()
     ROOT_DIR: ClassVar = Path("oidbt_ipfs_root")
     ZSTD_LEVEL: ClassVar = 22
-    RM_FILE_TD: ClassVar = datetime.timedelta(days=7)
     IPNS_PARAMS: ClassVar = {
         "key": "self",
         "lifetime": "8760h",
