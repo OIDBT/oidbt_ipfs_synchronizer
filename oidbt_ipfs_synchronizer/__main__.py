@@ -2,20 +2,31 @@ import asyncio
 
 
 async def run_example():
+    import json
     import urllib.request
+    from pathlib import Path
+    from typing import NotRequired, TypedDict
 
-    import oidbt_bangumi_ani_getter.log
     from oidbt_bangumi_ani_getter import Bangumi_ani_getter
     from oidbt_bt_entry_getter import Mikan_bt_entry_getter
+    from prompt_toolkit.shortcuts import PromptSession
 
     from .ipfs_synchronizer import Ipfs_synchronizer
     from .log import log
 
-    oidbt_bangumi_ani_getter.log.log.print_level = (
-        oidbt_bangumi_ani_getter.log.log.LogLevel.info
-    )
-
     log.print_level = log.LogLevel.debug
+    log.write_level = log.LogLevel.error
+    log.html_filename = "OIDBT-log.html"
+
+    class Config(TypedDict):
+        cookies: NotRequired[dict[str, dict[str, str]]]
+        email: NotRequired[str]
+
+    config: Config = (
+        json.loads(config_path.read_text("utf-8"))
+        if (config_path := Path("config.json")).is_file()
+        else {}
+    )
 
     proxies: dict[str, str] = urllib.request.getproxies()
     proxy_url = proxies.get("http")
@@ -28,12 +39,16 @@ async def run_example():
     bangumi_ani_getter = Bangumi_ani_getter(
         database_filename=DATABASE_FILENAME,
         proxy=proxy_url,
+        cookies=config.get("cookies", {}).get("bgm"),
+        email=config.get("email"),
     )
 
     bt_entry_getter_list = [
         Mikan_bt_entry_getter(
             database_filename=DATABASE_FILENAME,
             proxy=proxy_url,
+            cookies=config.get("cookies", {}).get("mikan"),
+            email=config.get("email"),
         ),
     ]
 
@@ -41,6 +56,18 @@ async def run_example():
         database_filename=DATABASE_FILENAME,
         bt_entry_getter_list=bt_entry_getter_list,
     )
+
+    async def input_async() -> None:
+        session = PromptSession()
+        while True:
+            cmd = None
+            try:
+                cmd = await session.prompt_async("动态调试> ")
+                exec(cmd)
+            except Exception as e:
+                log.error("{} {}", cmd, e, deep=True)
+            except KeyboardInterrupt:
+                continue
 
     await asyncio.gather(
         bangumi_ani_getter.auto_req(),
@@ -51,6 +78,7 @@ async def run_example():
             for bt_entry_getter in bt_entry_getter_list
         ),
         ipfs_synchronizer.auto_sync(),
+        input_async(),
     )
 
 

@@ -80,6 +80,10 @@ class Ipfs_synchronizer:
                 magnet: str
                 source_link_set: set[str]  # 一定有来源，所以不设置空默认值
                 title_set: set[str]
+                cid: str | None = pydantic.Field(
+                    default=None, description="该目录文件的 IPFS 源 CID"
+                )
+                """保留字段，暂无 IPFS 源"""
 
             update_time: datetime.datetime = pydantic.Field(
                 default_factory=datetime.datetime.now
@@ -127,7 +131,10 @@ class Ipfs_synchronizer:
         # 生成返回值
         root_path: Final = str(self.ROOT_DIR / "bangumi").replace("\\", "/")
         return tuple(
-            (f"{root_path}/{i}", self.enzstd(v.model_dump_json().encode()))
+            (
+                f"{root_path}/{i}",
+                self.enzstd(v.model_dump_json(exclude_none=True).encode()),
+            )
             for i, v in bgm_id__file_content.items()
         )
 
@@ -185,7 +192,7 @@ class Ipfs_synchronizer:
 
                 res_list = response.text.splitlines()
                 last_res = Add_res_item(**json.loads(res_list[-1]))
-                log.debug(
+                log.info(
                     "{} api/v0/add 响应: len={}   [-1]={}",
                     self.__class__.__name__,
                     len(res_list),
