@@ -3,6 +3,7 @@ import asyncio
 
 async def run_example():
     import json
+    import sys
     import urllib.request
     from pathlib import Path
     from typing import NotRequired, TypedDict
@@ -63,11 +64,19 @@ async def run_example():
             cmd = None
             try:
                 cmd = await session.prompt_async("动态调试> ")
+                assert isinstance(cmd, str)
+                cmd = cmd.strip()
+                match cmd:
+                    case "exit" | "\x1a":
+                        raise EOFError
                 exec(cmd)
-            except Exception as e:
-                log.error("{} {}", cmd, e, deep=True)
             except KeyboardInterrupt:
                 continue
+            except EOFError:
+                log.debug("手动退出")
+                sys.exit(0)
+            except Exception as e:
+                log.error("{} {}", cmd, e, deep=True)
 
     await asyncio.gather(
         bangumi_ani_getter.auto_req(),

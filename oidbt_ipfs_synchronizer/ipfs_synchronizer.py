@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, ClassVar, Final, Literal, NoReturn
 import httpx
 import pydantic
 import zstandard
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, ValidationError, field_serializer
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlmodel import create_engine
 
@@ -86,13 +86,16 @@ class Ipfs_synchronizer:
                 """保留字段，暂无 IPFS 源"""
 
             update_time: datetime.datetime = pydantic.Field(
-                default_factory=datetime.datetime.now
+                default_factory=lambda: datetime.datetime.now().astimezone()
             )
             magnet_list: list[Magnet_item] = pydantic.Field(default_factory=list)
 
+            @field_serializer("update_time")
+            def serialize_datetime(self, dt: datetime.datetime) -> str:
+                return dt.isoformat(sep=" ", timespec="minutes")
+
         # 从数据库读取数据并处理
         bgm_id__file_content: dict[int, File_content] = {}
-        datetime_now = datetime.datetime.now()
         for bt_entry_getter in self.bt_entry_getter_list:
             page_link_head = bt_entry_getter.page_link_head
             for website_entry_data in await bt_entry_getter.get_all_data():
@@ -111,7 +114,6 @@ class Ipfs_synchronizer:
                 if match_id not in bgm_id__file_content:
                     bgm_id__file_content[match_id] = File_content()
                 file_content = bgm_id__file_content[match_id]
-                file_content.update_time = datetime_now
 
                 magnet_list = file_content.magnet_list
                 for magnet_item in magnet_list:
