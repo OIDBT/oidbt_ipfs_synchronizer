@@ -25,7 +25,7 @@ class Ipfs_synchronizer:
     ROOT_DIR: ClassVar = Path("oidbt_ipfs_root")
     ZSTD_LEVEL: ClassVar = 22
     IPNS_PARAMS: ClassVar = {
-        "key": "self",
+        "key": "oidbt-ipns-root",
         "lifetime": "8760h",
         "ttl": "5m",
     }
