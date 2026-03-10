@@ -1,6 +1,5 @@
 import asyncio
 import datetime
-import itertools
 import json
 from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar, Final, Literal, NoReturn
@@ -27,7 +26,7 @@ class Ipfs_synchronizer:
     IPNS_PARAMS: ClassVar = {
         "key": "oidbt-ipns-root",
         "lifetime": "8760h",
-        "ttl": "5m",
+        "ttl": "10m",
     }
 
     @classmethod
@@ -148,7 +147,7 @@ class Ipfs_synchronizer:
             await conn.exec_driver_sql("VACUUM")
             await conn.commit()
 
-        return Path(self.database_filename).read_bytes()
+            return Path(self.database_filename).read_bytes()
 
     async def sync_ipfs(
         self,
@@ -170,9 +169,12 @@ class Ipfs_synchronizer:
                     params={"recursive": True, "wrap-with-directory": True},
                     files=tuple[tuple[str, tuple[str, bytes]]](
                         ("file", (filename, content))
-                        for filename, content in itertools.chain(
-                            bgm_files,
-                            [(f"{self.ROOT_DIR}/{self.database_filename}", db_file)],
+                        for filename, content in (
+                            *bgm_files,
+                            (
+                                f"{self.ROOT_DIR}/{self.database_filename}.zst",
+                                self.enzstd(db_file),
+                            ),
                         )
                     ),
                 )
@@ -278,7 +280,7 @@ class Ipfs_synchronizer:
     async def auto_sync(self) -> NoReturn:
         """自动同步"""
         cycle_num: int = 1
-        sleep_time: Literal[60, 600] = 60
+        sleep_time: Literal[300, 1200] = 300
         while True:
             await asyncio.sleep(sleep_time)
 
@@ -295,4 +297,4 @@ class Ipfs_synchronizer:
             log.info("IPNS Name = {}", ipns_name)
 
             cycle_num += 1
-            sleep_time = 600
+            sleep_time = 1200

@@ -58,6 +58,10 @@ async def run_example():
         bt_entry_getter_list=bt_entry_getter_list,
     )
 
+    Ipfs_synchronizer.DATABASE_LOCK = Mikan_bt_entry_getter.DATABASE_LOCK = (
+        Bangumi_ani_getter.DATABASE_LOCK
+    )
+
     async def input_async() -> None:
         session = PromptSession()
         while True:
@@ -67,7 +71,7 @@ async def run_example():
                 assert isinstance(cmd, str)
                 cmd = cmd.strip()
                 match cmd:
-                    case "exit" | "\x1a":
+                    case "exit" | str() as s if s.endswith("\x1a"):
                         raise EOFError
                 exec(cmd)
             except KeyboardInterrupt:
