@@ -15,6 +15,7 @@ from .log import log
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
+    from types import CoroutineType
 
     from oidbt_bt_entry_getter import Base_bt_entry_getter
 
@@ -70,6 +71,54 @@ class Ipfs_synchronizer:
             asyncio.create_task(self.client.aclose())  # noqa: RUF006
         except RuntimeError:
             asyncio.run(self.client.aclose())
+
+    async def req(
+        self, cor: CoroutineType[None, None, httpx.Response]
+    ) -> httpx.Response:
+        while True:
+            try:
+                response = await cor
+                log.debug(
+                    "{} 请求头: {}",
+                    self.__class__.__name__,
+                    response.request.headers,
+                    print_level=log.LogLevel._detail,
+                )
+                response.raise_for_status()
+                log.debug(
+                    "{} 响应头: {} {} {}",
+                    self.__class__.__name__,
+                    response.http_version,
+                    response.status_code,
+                    response.headers,
+                    print_level=log.LogLevel._detail,
+                )
+
+            except httpx.HTTPStatusError as e:
+                log.error(
+                    "{} 状态码错误: {} {}",
+                    self.__class__.__name__,
+                    e.response.status_code,
+                    e.response.text,
+                )
+            except httpx.ConnectError as e:
+                log.error("{} 连接失败: {}", self.__class__.__name__, e)
+            except httpx.TimeoutException:
+                log.warning("{} 请求超时", self.__class__.__name__)
+            except httpx.NetworkError as e:
+                log.warning(
+                    "{} 未知网络错误: {} {!r} {}",
+                    self.__class__.__name__,
+                    e,
+                    e,
+                    e.request.url,
+                    deep=True,
+                )
+
+            else:
+                return response
+
+            await asyncio.sleep(1)
 
     async def sync_bgm_files(self) -> tuple[tuple[str, bytes], ...]:
         """遍历 BT Entry 的数据库，更新以 Bangumi ID 为键的目录文件"""
@@ -162,9 +211,9 @@ class Ipfs_synchronizer:
             Hash: str
             Size: int
 
-        while True:
-            try:
-                response = await self.client.post(
+        try:
+            response = await self.req(
+                self.client.post(
                     "http://127.0.0.1:5001/api/v0/add",
                     params={"recursive": True, "wrap-with-directory": True},
                     files=tuple[tuple[str, tuple[str, bytes]]](
@@ -178,104 +227,79 @@ class Ipfs_synchronizer:
                         )
                     ),
                 )
-                log.debug(
-                    "{} 请求头: {}",
-                    self.__class__.__name__,
-                    response.request.headers,
-                    print_level=log.LogLevel._detail,
-                )
-                response.raise_for_status()
-                log.debug(
-                    "{} 响应头: {} {} {}",
-                    self.__class__.__name__,
-                    response.http_version,
-                    response.status_code,
-                    response.headers,
-                    print_level=log.LogLevel._detail,
-                )
+            )
 
-                res_list = response.text.splitlines()
-                last_res = Add_res_item(**json.loads(res_list[-1]))
-                log.info(
-                    "{} api/v0/add 响应: len={}   [-1]={}",
-                    self.__class__.__name__,
-                    len(res_list),
-                    last_res.model_dump(),
+            res_list = response.text.splitlines()
+            last_res = Add_res_item(**json.loads(res_list[-1]))
+            log.info(
+                "{} api/v0/add 响应: len={}   [-1]={}",
+                self.__class__.__name__,
+                len(res_list),
+                last_res.model_dump(),
+            )
+
+        except ValidationError as e:
+            log.error("{} 类型错误: {}", self.__class__.__name__, e)
+            raise
+
+        else:
+            return last_res.Hash
+
+    async def add_to_mfs(self, *, cid: str) -> None:
+        try:
+            response = await self.req(
+                self.client.post(
+                    "http://127.0.0.1:5001/api/v0/files/cp",
+                    params=[
+                        ("arg", f"/ipfs/{cid}"),
+                        (
+                            "arg",
+                            f"/{self.ROOT_DIR}-{datetime.datetime.now().astimezone().strftime('%Y-%m-%d_%H-%M-%S_%Z')}",
+                        ),
+                        ("parents", True),
+                    ],
                 )
+            )
 
-            except httpx.HTTPStatusError as e:
-                log.error(
-                    "{} 状态码错误: {} {}",
-                    self.__class__.__name__,
-                    e.response.status_code,
-                    e.response.text,
-                )
-            except httpx.ConnectError as e:
-                log.error("{} 连接失败: {}", self.__class__.__name__, e)
-            except httpx.TimeoutException:
-                log.warning("{} 请求超时", self.__class__.__name__)
-            except ValidationError as e:
-                log.error("{} 类型错误: {}", self.__class__.__name__, e)
-                raise
+            log.debug(
+                "{} api/v0/files/cp 响应: {}",
+                self.__class__.__name__,
+                response.text,
+            )
 
-            else:
-                return last_res.Hash
+        except ValidationError as e:
+            log.error("{} 类型错误: {}", self.__class__.__name__, e)
+            raise
 
-            await asyncio.sleep(1)
+        else:
+            return
 
     async def sync_ipns(self, *, cid: str):
         class Name_publish_item(BaseModel):
             Name: str
             Value: str
 
-        while True:
-            try:
-                response = await self.client.post(
+        try:
+            response = await self.req(
+                self.client.post(
                     "http://127.0.0.1:5001/api/v0/name/publish",
                     params={"arg": cid, **self.IPNS_PARAMS},
                 )
-                log.debug(
-                    "{} 请求头: {}",
-                    self.__class__.__name__,
-                    response.request.headers,
-                    print_level=log.LogLevel._detail,
-                )
-                response.raise_for_status()
-                log.debug(
-                    "{} 响应头: {} {} {}",
-                    self.__class__.__name__,
-                    response.http_version,
-                    response.status_code,
-                    response.headers,
-                    print_level=log.LogLevel._detail,
-                )
+            )
 
-                res = Name_publish_item(**json.loads(response.text))
-                log.debug(
-                    "{} api/v0/name/publish 响应: {}",
-                    self.__class__.__name__,
-                    res.model_dump(),
-                )
+            res = Name_publish_item(**json.loads(response.text))
+            log.debug(
+                "{} api/v0/name/publish 响应: {}",
+                self.__class__.__name__,
+                res.model_dump(),
+            )
 
-            except httpx.HTTPStatusError as e:
-                log.error(
-                    "{} 状态码错误: {} {}",
-                    self.__class__.__name__,
-                    e.response.status_code,
-                    e.response.text,
-                )
-            except httpx.ConnectError as e:
-                log.error("{} 连接失败: {}", self.__class__.__name__, e)
-            except httpx.TimeoutException:
-                log.warning("{} 请求超时", self.__class__.__name__)
-            except ValidationError as e:
-                log.error("{} 类型错误: {}", self.__class__.__name__, e)
-                raise
+        except ValidationError as e:
+            log.error("{} 类型错误: {}", self.__class__.__name__, e)
+            raise
 
-            else:
-                return res.Name
-
-            await asyncio.sleep(1)
+        else:
+            return res.Name
 
     async def auto_sync(self) -> NoReturn:
         """自动同步"""
@@ -292,6 +316,7 @@ class Ipfs_synchronizer:
                 bgm_files=bgm_files,
                 db_file=db_file,
             )
+            await self.add_to_mfs(cid=cid)
             ipns_name = await self.sync_ipns(cid=cid)
 
             log.info("IPNS Name = {}", ipns_name)
