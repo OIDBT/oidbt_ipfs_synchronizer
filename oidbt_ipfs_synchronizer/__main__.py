@@ -17,7 +17,6 @@ async def run_example():
 
     log.print_level = log.LogLevel.debug
     log.write_level = log.LogLevel.error
-    log.html_filename = "OIDBT-log.html"
 
     class Config(TypedDict):
         cookies: NotRequired[dict[str, dict[str, str]]]

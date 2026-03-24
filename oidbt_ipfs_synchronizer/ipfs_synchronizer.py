@@ -14,7 +14,7 @@ from sqlmodel import create_engine
 from .log import log
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Callable, Iterable
     from types import CoroutineType
 
     from oidbt_bt_entry_getter import Base_bt_entry_getter
@@ -73,11 +73,11 @@ class Ipfs_synchronizer:
             asyncio.run(self.client.aclose())
 
     async def req(
-        self, cor: CoroutineType[None, None, httpx.Response]
+        self, cor: Callable[[], CoroutineType[None, None, httpx.Response]]
     ) -> httpx.Response:
         while True:
             try:
-                response = await cor
+                response = await cor()
                 log.debug(
                     "{} 请求头: {}",
                     self.__class__.__name__,
@@ -213,7 +213,7 @@ class Ipfs_synchronizer:
 
         try:
             response = await self.req(
-                self.client.post(
+                lambda: self.client.post(
                     "http://127.0.0.1:5001/api/v0/add",
                     params={"recursive": True, "wrap-with-directory": True},
                     files=tuple[tuple[str, tuple[str, bytes]]](
@@ -248,7 +248,7 @@ class Ipfs_synchronizer:
     async def add_to_mfs(self, *, cid: str) -> None:
         try:
             response = await self.req(
-                self.client.post(
+                lambda: self.client.post(
                     "http://127.0.0.1:5001/api/v0/files/cp",
                     params=[
                         ("arg", f"/ipfs/{cid}"),
@@ -281,7 +281,7 @@ class Ipfs_synchronizer:
 
         try:
             response = await self.req(
-                self.client.post(
+                lambda: self.client.post(
                     "http://127.0.0.1:5001/api/v0/name/publish",
                     params={"arg": cid, **self.IPNS_PARAMS},
                 )
